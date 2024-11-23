@@ -16,6 +16,7 @@ library(stargazer)
 library(sandwich)
 library(aod)
 library(countrycode)
+library(lpirfs)
 jst_data <- read.csv('./JSTdatasetR6.csv')
 names(jst_data)[0:5]
 ```
@@ -35,7 +36,8 @@ logit_data <- jst_data %>%
          .after = ln_tloans_real) %>%
   select(country, year, crisisJST,
          tloans_real, ln_tloans_real, 
-         ln_diff_tloans, tloans, cpi)
+         ln_diff_tloans, tloans, cpi,
+         gdp)
 ```
 
 #### b. Running the logit model and exporting results
@@ -112,4 +114,102 @@ wald.test(
   Sigma = vcov(bvx_logit_credit),         # Variance-covariance matrix of the coefficients
   Terms = 2:6                       # Indices of lagged predictors in the model
 )
+```
+
+#### h. Use 5-year change in credit-to-GDP ratio as a predictor
+
+```{r}
+# Construct 5-year-change indicator
+logit_data <- logit_data %>%
+  mutate(credit_to_gdp = tloans / gdp) %>%
+  mutate(credit_to_gdp_fyc_pp = (credit_to_gdp - lag(credit_to_gdp, n=5))*100) 
+
+# Estimate new logit model
+#Compute model
+logit_credit_to_gdp <- glm(crisisJST ~ credit_to_gdp_fyc_pp + 
+                      factor(country),
+                    family = binomial(link = "logit"),
+                    data = logit_data)
+
+#Plot results
+stargazer(logit_credit_to_gdp,
+          type = "text",
+          align = TRUE,
+          omit = c("country"))
+```
+
+## Local Projections
+
+#### a. Load and prepare data for analysis  
+
+```{r}
+# Clear environment
+rm(list = ls())
+
+# Load datasets and merge 
+jst_data <- read.csv('./JSTdatasetR6.csv')
+rec_dummies <- read.csv("./RecessionDummies.csv")
+
+# Merge on iso code and year
+lp_data <- left_join(jst_data, rec_dummies, by = join_by(iso, year)) %>%
+  select(year, iso, country,
+         gdp, rgdpbarro, 
+         N, F)
+
+# Define the dependent variable: real GDP per capita growth
+lp_data <- lp_data %>%
+  group_by(iso) %>%
+  mutate(d_y = log(rgdpbarro) - lag(log(rgdpbarro))) %>%
+  ungroup()
+
+# Replace NAs with zeros to avoid problems with lps
+# lp_data$N <-replace_na(lp_data$N, 0)
+# lp_data$F <-replace_na(lp_data$F, 0)
+# Filter out missing values
+# lp_data <- lp_data %>%
+#   filter(!is.na(N))
+```
+
+#### b. Estimate the path of real GDP per capita after normal recessions
+
+```{r}
+# Run local projections
+lp_normal <- lp_lin_panel(
+  data_set = lp_data,
+  endog_data = "d_y",        # Dependent variable
+  cumul_mult = TRUE,         # Cumulative multipliers
+  shock = "N",               # Normal recession
+  diff_shock = FALSE,        # No differencing of shocks
+  panel_model = "within",    # Fixed effects model
+  confint = 1.96,            # 95% confidence interval
+  hor = 5                    # Horizons: 1 to 5 years
+)
+
+# Inspect results
+# print(lp_normal)
+
+# Plot impulse response functions (IRFs)
+plot(lp_normal)
+```
+
+#### c. Estimate the path of real GDP per capita after financial recessions
+
+```{r}
+# Run local projections
+lp_financial <- lp_lin_panel(
+  data_set = lp_data,
+  endog_data = "d_y",        # Dependent variable
+  cumul_mult = TRUE,         # Cumulative multipliers
+  shock = "F",               # Financial recession
+  diff_shock = FALSE,        # No differencing of shocks
+  panel_model = "within",    # Fixed effects model
+  confint = 1.96,            # 95% confidence interval
+  hor = 5                    # Horizons: 1 to 5 years
+)
+
+# Inspect results
+# print(lp_normal)
+
+# Plot impulse response functions (IRFs)
+plot(lp_financial)
 ```
