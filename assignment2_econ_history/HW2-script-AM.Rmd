@@ -4,12 +4,14 @@
 
 ## 0. Importing libraries and inspectioning data
 
-```{r}
+```{r, results='hide', warning=FALSE, message = FALSE}
 #install.packages("tidyverse")
 #install.packages("skimr")
 #install.packages("stargazer")
 #install.packages("sandwich")
 #install.packages("aod")
+#install.packages("countrycode")
+#install.packages("lpirfs")
 library(tidyverse)
 library(skimr)
 library(stargazer)
@@ -18,14 +20,13 @@ library(aod)
 library(countrycode)
 library(lpirfs)
 jst_data <- read.csv('./JSTdatasetR6.csv')
-names(jst_data)[0:5]
 ```
 
 ## 1. Estimate first logit model
 
 ### a. Select and refine data for logit model
 
-```{r}
+```{r, results='hide', warning=FALSE, message = FALSE}
 logit_data <- jst_data %>%
   arrange(country, year) %>%
   mutate(tloans_real = tloans/cpi, 
@@ -42,7 +43,7 @@ logit_data <- jst_data %>%
 
 #### b. Running the logit model and exporting results
 
-```{r}
+```{r, warning=FALSE}
 #Compute model
 logit_credit <- glm(crisisJST ~ lag(ln_diff_tloans, 1) +
                       lag(ln_diff_tloans, 2) + 
@@ -73,7 +74,7 @@ wald.test(
 
 #### d. Import BVX crisis list and merge with JST data
 
-```{r}
+```{r, results='hide', warning=FALSE, message = FALSE}
 #Use countrycodes to merge
 jst_data$countrycode <- countrycode(jst_data$country, 
                                     origin = "country.name", 
@@ -87,7 +88,7 @@ bvx_logit_data <- left_join(logit_data, bvx_crises, by = join_by(country, year))
 
 #### e. Estimate logit model for BVX crises
 
-```{r}
+```{r, warning=FALSE}
 #Compute model
 bvx_logit_credit <- glm(bvx_crisis ~ lag(ln_diff_tloans, 1) +
                       lag(ln_diff_tloans, 2) + 
@@ -118,7 +119,7 @@ wald.test(
 
 #### h. Use 5-year change in credit-to-GDP ratio as a predictor
 
-```{r}
+```{r, warning=FALSE}
 # Construct 5-year-change indicator
 logit_data <- logit_data %>%
   mutate(credit_to_gdp = tloans / gdp) %>%
@@ -142,7 +143,7 @@ stargazer(logit_credit_to_gdp,
 
 #### a. Load and prepare data for analysis  
 
-```{r}
+```{r, results='hide', warning=FALSE, message = FALSE}
 # Clear environment
 rm(list = ls())
 
