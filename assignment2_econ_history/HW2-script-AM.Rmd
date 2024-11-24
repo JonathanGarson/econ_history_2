@@ -1,3 +1,7 @@
+---
+---
+---
+
 # ECON HISTORY - ASSIGNMENT 2
 
 ### Benramdane, Blanchon, Garson, Maestri
@@ -141,7 +145,7 @@ stargazer(logit_credit_to_gdp,
 
 ## Local Projections
 
-#### a. Load and prepare data for analysis  
+#### a. Load and prepare data for analysis
 
 ```{r, results='hide', warning=FALSE, message = FALSE}
 # Clear environment

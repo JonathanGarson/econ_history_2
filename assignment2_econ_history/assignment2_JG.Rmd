@@ -1,0 +1,265 @@
+---
+---
+---
+
+# Econ History Assignment 2
+
+Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI
+
+## Loading the library
+
+```{r, results='hide', warning=FALSE, message = FALSE}
+library(data.table)
+library(fixest)
+library(stargazer)
+library(aod)
+library(readxl)
+library(countrycode)
+library(pROC)
+library(lpirfs)
+```
+
+## Data
+
+```{r}
+jst = fread("JSTdatasetR6.csv")
+rec = fread("RecessionDummies.csv")
+bvx = fread("bvx_crises_list.csv")
+```
+
+## Part A
+
+### Logit
+
+#### JST Crisis
+
+Estimate a logit model with country fixed effects and with five lags of log changes in real credit as a predictor for JST crises and document the results in table.
+
+-   Test for joint significance of five lags credit growth.
+
+-   Repeat with BVX crisis date
+
+-   Used 5-year change in the ratio of credit over GDP predictor
+
+    ```{r, warning=FALSE}
+    jst[, tloans_real := tloans/cpi]
+    jst[, ln_tloans_real := log(tloans_real),]
+    jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
+
+    logit_credit = glm(crisisJST ~ 
+          shift(ln_diff_tloans, 1, type = "lag") 
+          + shift(ln_diff_tloans, 2, type = "lag") 
+          + shift(ln_diff_tloans, 3, type = "lag") 
+          + shift(ln_diff_tloans, 4, type = "lag") 
+          + shift(ln_diff_tloans, 5, type = "lag") 
+          + factor(country)
+        ,family = binomial(link = "logit"), 
+        data = jst)
+
+    stargazer(logit_credit,
+              type = "text",
+              align = TRUE,
+              omit = c("country"))
+    ```
+
+    We know test for the joint significance of the lag variables
+
+    ```{r}
+    wald.test(
+      b = coef(logit_credit),  # Coefficients from the full model
+      Sigma = vcov(logit_credit),  # Variance-covariance matrix of coefficients
+      Terms = 2:6 # Indices of lagged predictors in the model
+    )
+    ```
+
+#### BVX Crisis
+
+```{r, warning=FALSE}
+# We merge 
+setnames(bvx, "countrycode", "iso")
+bvx = bvx[, country := NULL]
+jst = merge(jst, bvx, all.x = TRUE, by = c("iso", "year")) 
+
+# We regress
+
+logit_bvx = glm(bvx_crisis ~ 
+      shift(ln_diff_tloans, 1, type = "lag") 
+      + shift(ln_diff_tloans, 2, type = "lag") 
+      + shift(ln_diff_tloans, 3, type = "lag") 
+      + shift(ln_diff_tloans, 4, type = "lag") 
+      + shift(ln_diff_tloans, 5, type = "lag") 
+      + factor(country)
+    ,family = binomial(link = "logit"), 
+    data = jst)
+
+stargazer(logit_credit,
+          type = "text",
+          align = TRUE,
+          omit = c("country"))
+```
+
+```{r}
+wald.test(
+  b = coef(logit_bvx),  # Coefficients from the full model
+  Sigma = vcov(logit_bvx),  # Variance-covariance matrix of coefficients
+  Terms = 2:6 # Indices of lagged predictors in the model
+)
+```
+
+#### GDP ratio
+
+Used 5-year change in the ratio of credit over GDP as a predictor
+
+```{r, warning = FALSE}
+jst[, `:=` (gdp_real = gdp/cpi), by = c("country")]
+jst[, creditgdp := tloans_real/gdp_real, by = c("country")]
+jst[, creditgdpchange := creditgdp - shift(creditgdp, 5, type = "lag")]
+
+logit_gdp = glm(crisisJST ~ 
+                creditgdpchange 
+                + factor(country)
+                ,family = binomial(link = "logit"), 
+                data = jst)
+
+stargazer(logit_gdp,
+          type = "text",
+          align = TRUE,
+          omit = c("country"))
+```
+
+### Model estimation
+
+#### ROC test
+
+Compare in-sample and out of sample ROC, estimating the model until 1984 and predicting crisis for post-1984 years.
+
+```{r, warning=FALSE}
+# we split data in two
+pre1984 = jst[year <= 1984,]
+post1984 = jst[year > 1984,]
+
+# we test on our pre-1984 data
+logit_1984 = glm(crisisJST ~ 
+      shift(ln_diff_tloans, 1, type = "lag") 
+      + shift(ln_diff_tloans, 2, type = "lag") 
+      + shift(ln_diff_tloans, 3, type = "lag") 
+      + shift(ln_diff_tloans, 4, type = "lag") 
+      + shift(ln_diff_tloans, 5, type = "lag") 
+      + country
+    ,family = binomial(link = "logit"), 
+    data = pre1984)
+
+# Predict probabilities for training data (in-sample)
+pre1984$predicted_prob <- predict(logit_1984, pre1984, type = "response")
+
+# Predict probabilities for testing data (out-of-sample)
+post1984$predicted_prob <- predict(logit_1984, post1984, type = "response")
+
+# Compute ROC curve for in-sample data
+roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
+
+# Compute ROC curve for out-of-sample data
+roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
+
+# Plot ROC curves
+plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
+plot(roc_out_sample, col = "red", add = TRUE)
+
+# Add legend
+legend("bottomright", legend = c("In-Sample", "Out-of-Sample"),
+       col = c("blue", "red"), lty = 1, cex = 0.8)
+
+# Print AUC values
+cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
+cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
+
+```
+
+#### Money as predictor
+
+Compare the baseline model to a logit model with money as a predictor.
+
+```{r, warning=FALSE}
+jst[, money_real := money/cpi]
+jst[, ln_money_real := log(money_real),]
+jst[, ln_diff_money_real := ln_money_real - shift(ln_money_real, 1, type = "lag"), by = country]
+
+logit_money = glm(crisisJST ~ 
+      shift(ln_diff_money_real, 1, type = "lag") 
+      + shift(ln_diff_money_real, 2, type = "lag") 
+      + shift(ln_diff_money_real, 3, type = "lag") 
+      + shift(ln_diff_money_real, 4, type = "lag") 
+      + shift(ln_diff_money_real, 5, type = "lag") 
+      + factor(country)
+    ,family = binomial(link = "logit"), 
+    data = jst)
+
+stargazer(logit_money,
+          type = "text",
+          align = TRUE,
+          omit = c("country"))
+```
+
+#### Public debt as predictor
+
+```{r, warning=FALSE}
+jst[, diff_debtgdp := debtgdp - shift(debtgdp, 1, type = "lag"), by = c("country")]
+
+logit_gdp = glm(crisisJST ~ 
+      shift(diff_debtgdp, 1, type = "lag") 
+      + shift(diff_debtgdp, 2, type = "lag") 
+      + shift(diff_debtgdp, 3, type = "lag") 
+      + shift(diff_debtgdp, 4, type = "lag") 
+      + shift(diff_debtgdp, 5, type = "lag") 
+      + factor(country)
+    ,family = binomial(link = "logit"), 
+    data = jst)
+
+stargazer(logit_gdp,
+          type = "text",
+          align = TRUE,
+          omit = c("country"))
+```
+
+## Part B
+
+```{r}
+jst = merge(jst, rec, by = c("year", "iso"))
+jst[, d_y := log(rgdpbarro) - shift(log(rgdpbarro), 1, type = "lag")]
+```
+
+### Normal Recessions
+
+```{r}
+lp_normal <- lp_lin_panel(
+  data_set = jst,
+  endog_data = "d_y",        # Dependent variable
+  cumul_mult = FALSE,         # Cumulative multipliers
+  shock = "N",               # Normal recession
+  diff_shock = FALSE,        # No differencing of shocks
+  panel_model = "within",    # Fixed effects model
+  confint = 1.96,            # 95% confidence interval
+  hor = 5                    # Horizons: 1 to 5 years
+)
+
+# Plot impulse response functions (IRFs)
+plot(lp_normal)
+```
+
+### Financial Recessions
+
+```{r}
+lp_normal <- lp_lin_panel(
+  data_set = jst,
+  endog_data = "d_y",        # Dependent variable
+  cumul_mult = FALSE,         # Cumulative multipliers
+  shock = "F",               # Normal recession
+  diff_shock = FALSE,        # No differencing of shocks
+  panel_model = "within",    # Fixed effects model
+  confint = 1.96,            # 95% confidence interval
+  hor = 5                    # Horizons: 1 to 5 years
+)
+
+# Plot impulse response functions (IRFs)
+plot(lp_normal)
+```
