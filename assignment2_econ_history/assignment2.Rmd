@@ -4,7 +4,7 @@ Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI
 
 ## Loading the library
 
-```{r, results='hide', warning=FALSE, message = FALSE}
+```{r}
 library(data.table)
 library(fixest)
 library(stargazer)
@@ -18,9 +18,9 @@ library(lpirfs)
 ## Data
 
 ```{r}
-jst = fread("../data/JSTdatasetR6.csv")
-rec = fread("../data/RecessionDummies.csv")
-bvx = fread("../data/bvx_crises_list.csv")
+jst = fread("JSTdatasetR6.csv")
+rec = fread("RecessionDummies.csv")
+bvx = fread("bvx_crises_list.csv")
 ```
 
 ## Part A
@@ -37,7 +37,7 @@ Estimate a logit model with country fixed effects and with five lags of log chan
 
 -   Used 5-year change in the ratio of credit over GDP predictor
 
-    ```{r, warning=FALSE}
+    ```{r}
     jst[, tloans_real := tloans/cpi]
     jst[, ln_tloans_real := log(tloans_real),]
     jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
@@ -70,7 +70,7 @@ Estimate a logit model with country fixed effects and with five lags of log chan
 
 #### BVX Crisis
 
-```{r, warning=FALSE}
+```{r}
 # We merge 
 setnames(bvx, "countrycode", "iso")
 bvx = bvx[, country := NULL]
@@ -106,7 +106,7 @@ wald.test(
 
 Used 5-year change in the ratio of credit over GDP as a predictor
 
-```{r, warning = FALSE}
+```{r}
 jst[, `:=` (gdp_real = gdp/cpi), by = c("country")]
 jst[, creditgdp := tloans_real/gdp_real, by = c("country")]
 jst[, creditgdpchange := creditgdp - shift(creditgdp, 5, type = "lag")]
@@ -129,7 +129,7 @@ stargazer(logit_gdp,
 
 Compare in-sample and out of sample ROC, estimating the model until 1984 and predicting crisis for post-1984 years.
 
-```{r, warning=FALSE}
+```{r}
 # we split data in two
 pre1984 = jst[year <= 1984,]
 post1984 = jst[year > 1984,]
@@ -175,7 +175,7 @@ cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 
 Compare the baseline model to a logit model with money as a predictor.
 
-```{r, warning=FALSE}
+```{r}
 jst[, money_real := money/cpi]
 jst[, ln_money_real := log(money_real),]
 jst[, ln_diff_money_real := ln_money_real - shift(ln_money_real, 1, type = "lag"), by = country]
@@ -198,8 +198,8 @@ stargazer(logit_money,
 
 #### Public debt as predictor
 
-```{r, warning=FALSE}
-jst[, diff_debtgdp := debtgdp - shift(debtgdp, 1, type = "lag"), by = c("country")]
+```{r}
+jst[, diff_debtgdp := debtgdp - shift(debtgdp, 1, type = "lag"), by = country]
 
 logit_gdp = glm(crisisJST ~ 
       shift(diff_debtgdp, 1, type = "lag") 
@@ -217,134 +217,13 @@ stargazer(logit_gdp,
           omit = c("country"))
 ```
 
-### ROC test
-
-We split again the data before and after 1984 to obtain our ROC test with the newly created variables.
-
-```{r}
-pre1984 = jst[year <= 1984,]
-post1984 = jst[year >= 1984,]
-```
-
-#### Money
-
-```{r}
-logit_1984 = glm(crisisJST ~ 
-      shift(ln_diff_money_real, 1, type = "lag") 
-      + shift(ln_diff_money_real, 2, type = "lag") 
-      + shift(ln_diff_money_real, 3, type = "lag") 
-      + shift(ln_diff_money_real, 4, type = "lag") 
-      + shift(ln_diff_money_real, 5, type = "lag") 
-      + country
-    ,family = binomial(link = "logit"), 
-    data = pre1984)
-
-# Predict probabilities for training data (in-sample)
-pre1984$predicted_prob <- predict(logit_1984, pre1984, type = "response")
-
-# Predict probabilities for testing data (out-of-sample)
-post1984$predicted_prob <- predict(logit_1984, post1984, type = "response")
-
-# Compute ROC curve for in-sample data
-roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
-
-# Compute ROC curve for out-of-sample data
-roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
-
-# Plot ROC curves
-plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
-plot(roc_out_sample, col = "red", add = TRUE)
-
-# Add legend
-legend("bottomright", legend = c("In-Sample", "Out-of-Sample"),
-       col = c("blue", "red"), lty = 1, cex = 0.8)
-
-# Print AUC values
-cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
-cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
-```
-
-#### Debt-to-GDP
-
-```{r}
-logit_1984 = glm(crisisJST ~ 
-      shift(diff_debtgdp, 1, type = "lag") 
-      + shift(diff_debtgdp, 2, type = "lag") 
-      + shift(diff_debtgdp, 3, type = "lag") 
-      + shift(diff_debtgdp, 4, type = "lag") 
-      + shift(diff_debtgdp, 5, type = "lag") 
-      + country
-    ,family = binomial(link = "logit"), 
-    data = pre1984)
-
-# Predict probabilities for training data (in-sample)
-pre1984$predicted_prob <- predict(logit_1984, pre1984, type = "response")
-
-# Predict probabilities for testing data (out-of-sample)
-post1984$predicted_prob <- predict(logit_1984, post1984, type = "response")
-
-# Compute ROC curve for in-sample data
-roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
-
-# Compute ROC curve for out-of-sample data
-roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
-
-# Plot ROC curves
-plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
-plot(roc_out_sample, col = "red", add = TRUE)
-
-# Add legend
-legend("bottomright", legend = c("In-Sample", "Out-of-Sample"),
-       col = c("blue", "red"), lty = 1, cex = 0.8)
-
-# Print AUC values
-cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
-cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
-```
-
 ## Part B
 
 ```{r}
 jst = merge(jst, rec, by = c("year", "iso"))
-jst[, d_y := log(rgdpbarro) - shift(log(rgdpbarro), 1, type = "lag"), by = "country"]
-
-lp_reg = jst[, .(iso, year, d_y, N, `F`)]
-lp_reg[, N := ifelse(is.na(N), 0, N)]
-lp_reg[, `F` := ifelse(is.na(`F`), 0, `F`)]
 ```
 
-### Normal Recessions
-
 ```{r}
-lp_normal <- lp_lin_panel(
-  data_set = lp_reg,
-  endog_data = "d_y",        # Dependent variable
-  cumul_mult = FALSE,         # Cumulative multipliers
-  shock = "N",               # Normal recession
-  diff_shock = FALSE,        # No differencing of shocks
-  panel_model = "within",    # Fixed effects model
-  confint = 1.96,            # 95% confidence interval
-  hor = 5                    # Horizons: 1 to 5 years
-)
-
-# Plot impulse response functions (IRFs)
-plot(lp_normal)
-```
-
-### Financial Recessions
-
-```{r}
-lp_normal <- lp_lin_panel(
-  data_set = lp_reg,
-  endog_data = "d_y",        # Dependent variable
-  cumul_mult = FALSE,         # Cumulative multipliers
-  shock = "F",               # Normal recession
-  diff_shock = FALSE,        # No differencing of shocks
-  panel_model = "within",    # Fixed effects model
-  confint = 1.96,            # 95% confidence interval
-  hor = 5                    # Horizons: 1 to 5 years
-)
-
-# Plot impulse response functions (IRFs)
-plot(lp_normal)
+lp_lin_panel(, data_set = jst)
+rgdpbarro
 ```
