@@ -17,7 +17,7 @@ library(lpirfs)
 
 ## Data
 
-```{r}
+```{r, results}
 jst = fread("../data/JSTdatasetR6.csv")
 rec = fread("../data/RecessionDummies.csv")
 bvx = fread("../data/bvx_crises_list.csv")
@@ -38,35 +38,66 @@ Estimate a logit model with country fixed effects and with five lags of log chan
 -   Used 5-year change in the ratio of credit over GDP predictor
 
     ```{r, warning=FALSE}
-    jst[, tloans_real := tloans/cpi]
-    jst[, ln_tloans_real := log(tloans_real),]
-    jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
+      jst[, tloans_real := tloans/cpi]
+      jst[, ln_tloans_real := log(tloans_real),]
+      jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
 
-    logit_credit = glm(crisisJST ~ 
-          shift(ln_diff_tloans, 1, type = "lag") 
-          + shift(ln_diff_tloans, 2, type = "lag") 
-          + shift(ln_diff_tloans, 3, type = "lag") 
-          + shift(ln_diff_tloans, 4, type = "lag") 
-          + shift(ln_diff_tloans, 5, type = "lag") 
-          + factor(country)
-        ,family = binomial(link = "logit"), 
-        data = jst)
+      logit_credit = glm(crisisJST ~ 
+        shift(ln_diff_tloans, 1, type = "lag") 
+        + shift(ln_diff_tloans, 2, type = "lag") 
+        + shift(ln_diff_tloans, 3, type = "lag") 
+        + shift(ln_diff_tloans, 4, type = "lag") 
+        + shift(ln_diff_tloans, 5, type = "lag") 
+        + factor(country)
+      ,family = binomial(link = "logit"), 
+      data = jst)
 
-    stargazer(logit_credit,
-              type = "text",
-              align = TRUE,
-              omit = c("country"))
+      stargazer(logit_credit,
+            type = "text",
+            align = TRUE,
+            omit = c("country"))
     ```
 
-    We know test for the joint significance of the lag variables
+We now test for the joint significance of the lag variables. A first attempt to challenge the joint significance could be a wald test. The null hypothesis is that the five lags of credit growth are not jointly significant:
 
-    ```{r}
-    wald.test(
-      b = coef(logit_credit),  # Coefficients from the full model
-      Sigma = vcov(logit_credit),  # Variance-covariance matrix of coefficients
-      Terms = 2:6 # Indices of lagged predictors in the model
-    )
-    ```
+$$
+\begin{aligned}
+H_0: \beta_1 = \beta_2 = \beta_3 = \beta_4 = \beta_5 = 0\\
+\end{aligned}
+$$
+
+```{r}
+wald.test(
+b = coef(logit_credit),  # Coefficients from the full model
+Sigma = vcov(logit_credit),  # Variance-covariance matrix of coefficients
+Terms = 2:6 # Indices of lagged predictors in the model
+  )
+```
+
+Complementary, we can test joint significance with the likelihood ratio chi-square test. This tests consists of comparing the full model with a restricted model without the variables we want to test for. Let's first estimate the restricted model.
+
+```{r}
+  # Test for joint significance of five lags credit growth. 
+  # We run a restricted model which excludes the five lags of credit growth 
+restricted_model <- glm(
+  formula = crisisJST ~ factor(country),
+  data = jst,
+  family = binomial(link = "logit")
+)
+```
+
+Now let's run the LR test.
+
+```{r}
+lr_stat <- 2 * (logLik(logit_credit) - logLik(restricted_model))
+df <- 5
+p_value <- pchisq(lr_stat, df = df, lower.tail = FALSE)
+cat("Likelihood Ratio Statistic:", lr_stat, "\n")
+cat("Degrees of Freedom:", df, "\n")
+cat("P-value:", p_value, "\n")
+```
+
+In both cases the p-value is close to 0, which means that we can reject the null hypothesis. Therefore, the five lags jointly contribute significantly to predicting the crisis variable.
 
 #### BVX Crisis
 
@@ -101,6 +132,8 @@ wald.test(
   Terms = 2:6 # Indices of lagged predictors in the model
 )
 ```
+
+Conclusion: We reject the null hypothesis, variables are jointly significant and able to predict the output variable. Hence, we get approximately the same result between BVX and JST crises classifications.
 
 #### GDP ratio
 
@@ -306,9 +339,9 @@ cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 
 ```{r}
 jst = merge(jst, rec, by = c("year", "iso"))
-jst[, d_y := log(rgdpbarro) - shift(log(rgdpbarro), 1, type = "lag"), by = "country"]
+jst[, log_y := log(rgdpbarro)]
 
-lp_reg = jst[, .(iso, year, d_y, N, `F`)]
+lp_reg = jst[, .(iso, year, log_y, N, `F`)]
 lp_reg[, N := ifelse(is.na(N), 0, N)]
 lp_reg[, `F` := ifelse(is.na(`F`), 0, `F`)]
 ```
@@ -318,10 +351,11 @@ lp_reg[, `F` := ifelse(is.na(`F`), 0, `F`)]
 ```{r}
 lp_normal <- lp_lin_panel(
   data_set = lp_reg,
-  endog_data = "d_y",        # Dependent variable
-  cumul_mult = FALSE,         # Cumulative multipliers
+  endog_data = "log_y",      # Dependent variable
+  cumul_mult = TRUE,         # Cumulative multipliers
   shock = "N",               # Normal recession
   diff_shock = FALSE,        # No differencing of shocks
+  c_fd_exog_data = "F",
   panel_model = "within",    # Fixed effects model
   confint = 1.96,            # 95% confidence interval
   hor = 5                    # Horizons: 1 to 5 years
@@ -336,10 +370,11 @@ plot(lp_normal)
 ```{r}
 lp_normal <- lp_lin_panel(
   data_set = lp_reg,
-  endog_data = "d_y",        # Dependent variable
-  cumul_mult = FALSE,         # Cumulative multipliers
+  endog_data = "log_y",      # Dependent variable
+  cumul_mult = TRUE,         # Cumulative multipliers
   shock = "F",               # Normal recession
   diff_shock = FALSE,        # No differencing of shocks
+  c_fd_exog_data = "N",
   panel_model = "within",    # Fixed effects model
   confint = 1.96,            # 95% confidence interval
   hor = 5                    # Horizons: 1 to 5 years
@@ -348,3 +383,5 @@ lp_normal <- lp_lin_panel(
 # Plot impulse response functions (IRFs)
 plot(lp_normal)
 ```
+
+The graphs reveal key differences in the economic costs of normal and financial recessions over a five-year horizon, with no evidence of recovery in either case. Both types of recessions exhibit a similar initial impact, with GDP per capita dropping sharply at year 1. However, their paths diverge slightly in the following years. In normal recessions, the GDP losses after year 1 remain consistently around -5% to -6% throughout the horizon. In financial recessions, the losses deepen gradually, reaching approximately -7% by year 5. The absence of recovery in both graphs highlights the persistent nature of the economic damage caused by recessions, with financial recessions appearing more costly due to their steadily worsening impact. Overall, the results indicate that neither type of recession allows for meaningful recovery within five years, with financial recessions causing slightly greater and more prolonged economic damage.
