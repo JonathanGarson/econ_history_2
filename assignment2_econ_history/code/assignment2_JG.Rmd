@@ -8,9 +8,7 @@ keep_tex: yes
 
 # Econ History Assignment 2
 
-## Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI - Nov 29, 2024
-
-## Loading the library
+## Loading libraries
 
 ```{r, results='hide', warning=FALSE, message = FALSE}
 library(data.table)
@@ -23,7 +21,7 @@ library(pROC)
 library(lpirfs)
 ```
 
-## Data
+## Importing data
 
 ```{r, results}
 jst = fread("../data/JSTdatasetR6.csv")
@@ -31,26 +29,29 @@ rec = fread("../data/RecessionDummies.csv")
 bvx = fread("../data/bvx_crises_list.csv")
 ```
 
-## Part A
-
-### Logit
+## Part A - Logit
 
 Estimate a logit model with country fixed effects and with five lags of log changes in Money as a predictor for JST crises and document the results in table.
 
 -   Test for joint significance of five lags credit growth.
-
 -   Repeat with BVX crisis date
+-   Use 5-year change in the ratio of credit over GDP predictor
 
--   Used 5-year change in the ratio of credit over GDP predictor
+.
 
-#### JST Crisis
+#### JST Crises
+
+\noindent
 
 ```{r, warning=FALSE, message=FALSE}
-  jst[, tloans_real := tloans/cpi]
-  jst[, ln_tloans_real := log(tloans_real),]
-  jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
 
-  logit_credit = glm(crisisJST ~ 
+# Create dependent variable and estimate model
+
+jst[, tloans_real := tloans/cpi]
+jst[, ln_tloans_real := log(tloans_real),]
+jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
+
+logit_credit = glm(crisisJST ~ 
     shift(ln_diff_tloans, 1, type = "lag") 
     + shift(ln_diff_tloans, 2, type = "lag") 
     + shift(ln_diff_tloans, 3, type = "lag") 
@@ -60,16 +61,16 @@ Estimate a logit model with country fixed effects and with five lags of log chan
   ,family = binomial(link = "logit"), 
   data = jst)
 
-  stargazer(logit_credit,
+stargazer(logit_credit,
         type = "text",
         align = TRUE,
         omit = c("country"),
         dep.var.labels = c("Crisis (JST)"),
-        covariate.labels = c("Log-change Money - T-1",
-                             "Log-change Money - T-2",
-                             "Log-change Money - T-3",
-                             "Log-change Money - T-4",
-                             "Log-change Money - T-5"))
+        covariate.labels = c("Log-change Real Credit - T-1",
+                             "Log-change Real Credit - T-2",
+                             "Log-change Real Credit - T-3",
+                             "Log-change Real Credit - T-4",
+                             "Log-change Real Credit - T-5"))
 ```
 
 We now test for the joint significance of the lag variables. A first attempt to challenge the joint significance could be a Wald test. The null hypothesis is that the five lags of credit growth are not jointly significant:
@@ -138,11 +139,11 @@ stargazer(logit_bvx,
           align = TRUE,
           omit = c("country"),
           dep.var.labels = c("BVX Crisis"),
-          covariate.labels = c("Log-change Money - T-1",
-                             "Log-change Money - T-2",
-                             "Log-change Money - T-3",
-                             "Log-change Money - T-4",
-                             "Log-change Money - T-5"))
+          covariate.labels = c("Log-change Real Credit - T-1",
+                             "Log-change Real Credit - T-2",
+                             "Log-change Real Credit - T-3",
+                             "Log-change Real Credit - T-4",
+                             "Log-change Real Credit - T-5"))
 ```
 
 ```{r}
