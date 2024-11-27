@@ -114,7 +114,7 @@ cat("P-value:", p_value, "\n")
 
 In both cases the p-value is close to 0, which means that we can reject the null hypothesis. Therefore, the five lags jointly contribute significantly to predicting the crisis variable.
 
-#### BVX Crisis
+#### BVX Crises
 
 ```{r, warning=FALSE}
 # We merge 
@@ -156,7 +156,7 @@ wald.test(
 
 Conclusion: We reject the null hypothesis, variables are jointly significant and able to predict the output variable. Hence, we get approximately the same result between BVX and JST crises classifications.
 
-#### GDP ratio
+#### GDP Ratio
 
 Used 5-year change in the ratio of credit over GDP as a predictor
 
@@ -181,7 +181,7 @@ stargazer(logit_gdp,
 
 ### Model estimation
 
-#### ROC test
+#### ROC test - Logit Model predictions using Real Credit Change
 
 Compare in-sample and out of sample ROC, estimating the model until 1984 and predicting crisis for post-1984 years.
 
@@ -226,6 +226,8 @@ cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
 cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 
 ```
+
+As we can judge from the Area Under the ROC (AUROC/AUC), the logit model using real credit as a predictor for financial crises has satisfactory in-sample performances (In-Sample AUC: 0.7161041), which drop slightly below the usual satisfactory threshold of 0.7 when predicting out of sample (Out-of-Sample AUC: 0.6581494). Further adjustments and variables might be needed to have a model with better predictive power.
 
 #### Money as predictor
 
@@ -285,7 +287,7 @@ stargazer(logit_gdp,
                              "Debt-to-GDP - T-5"))
 ```
 
-### ROC test
+### ROC tests - Models using Money and Debt-to-GDP ratio
 
 We split again the data before and after 1984 to obtain our ROC test with the newly created variables.
 
@@ -332,6 +334,8 @@ cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
 cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 ```
 
+Similarly to the first model, the logit model using log-change in money as a predictor for financial crises has satisfactory in-sample performances (In-Sample AUC: 0.6912874), but has worse performances than the model using change in real credit when predicting out of sample (Out-of-Sample AUC: 0.5588115). We would therefore prefer to adopt real credit as a possible predictor.
+
 #### Debt-to-GDP
 
 ```{r}
@@ -369,6 +373,10 @@ legend("bottomright", legend = c("In-Sample", "Out-of-Sample"),
 cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
 cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 ```
+
+Analogous considerations apply to the model exploiting the Debt-to-GDP ratio, as it performs worse than both the previous models in sample and it is particularly unsatisfactory out of sample, showing very poor predictive power (Out-of-Sample AUC: 0.4794992).
+
+\newpage
 
 ## Part B - Linear projections
 
