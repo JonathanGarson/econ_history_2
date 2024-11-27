@@ -1,6 +1,14 @@
+---
+title: "Econ History Assignment 2"
+author: "Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI"
+date: "Nov 29, 2024"
+output: pdf_document
+keep_tex: yes
+---
+
 # Econ History Assignment 2
 
-Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI
+## Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI - Nov 29, 2024
 
 ## Loading the library
 
@@ -27,9 +35,7 @@ bvx = fread("../data/bvx_crises_list.csv")
 
 ### Logit
 
-#### JST Crisis
-
-Estimate a logit model with country fixed effects and with five lags of log changes in real credit as a predictor for JST crises and document the results in table.
+Estimate a logit model with country fixed effects and with five lags of log changes in Money as a predictor for JST crises and document the results in table.
 
 -   Test for joint significance of five lags credit growth.
 
@@ -37,28 +43,36 @@ Estimate a logit model with country fixed effects and with five lags of log chan
 
 -   Used 5-year change in the ratio of credit over GDP predictor
 
-    ```{r, warning=FALSE}
-      jst[, tloans_real := tloans/cpi]
-      jst[, ln_tloans_real := log(tloans_real),]
-      jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
+#### JST Crisis
 
-      logit_credit = glm(crisisJST ~ 
-        shift(ln_diff_tloans, 1, type = "lag") 
-        + shift(ln_diff_tloans, 2, type = "lag") 
-        + shift(ln_diff_tloans, 3, type = "lag") 
-        + shift(ln_diff_tloans, 4, type = "lag") 
-        + shift(ln_diff_tloans, 5, type = "lag") 
-        + factor(country)
-      ,family = binomial(link = "logit"), 
-      data = jst)
+```{r, warning=FALSE, message=FALSE}
+  jst[, tloans_real := tloans/cpi]
+  jst[, ln_tloans_real := log(tloans_real),]
+  jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
 
-      stargazer(logit_credit,
-            type = "text",
-            align = TRUE,
-            omit = c("country"))
-    ```
+  logit_credit = glm(crisisJST ~ 
+    shift(ln_diff_tloans, 1, type = "lag") 
+    + shift(ln_diff_tloans, 2, type = "lag") 
+    + shift(ln_diff_tloans, 3, type = "lag") 
+    + shift(ln_diff_tloans, 4, type = "lag") 
+    + shift(ln_diff_tloans, 5, type = "lag") 
+    + factor(country)
+  ,family = binomial(link = "logit"), 
+  data = jst)
 
-We now test for the joint significance of the lag variables. A first attempt to challenge the joint significance could be a wald test. The null hypothesis is that the five lags of credit growth are not jointly significant:
+  stargazer(logit_credit,
+        type = "text",
+        align = TRUE,
+        omit = c("country"),
+        dep.var.labels = c("Crisis (JST)"),
+        covariate.labels = c("Log-change Money - T-1",
+                             "Log-change Money - T-2",
+                             "Log-change Money - T-3",
+                             "Log-change Money - T-4",
+                             "Log-change Money - T-5"))
+```
+
+We now test for the joint significance of the lag variables. A first attempt to challenge the joint significance could be a Wald test. The null hypothesis is that the five lags of credit growth are not jointly significant:
 
 $$
 \begin{aligned}
@@ -119,10 +133,16 @@ logit_bvx = glm(bvx_crisis ~
     ,family = binomial(link = "logit"), 
     data = jst)
 
-stargazer(logit_credit,
+stargazer(logit_bvx,
           type = "text",
           align = TRUE,
-          omit = c("country"))
+          omit = c("country"),
+          dep.var.labels = c("BVX Crisis"),
+          covariate.labels = c("Log-change Money - T-1",
+                             "Log-change Money - T-2",
+                             "Log-change Money - T-3",
+                             "Log-change Money - T-4",
+                             "Log-change Money - T-5"))
 ```
 
 ```{r}
@@ -153,7 +173,9 @@ logit_gdp = glm(crisisJST ~
 stargazer(logit_gdp,
           type = "text",
           align = TRUE,
-          omit = c("country"))
+          omit = c("country"),
+        dep.var.labels = c("Crisis (JST)"),
+        covariate.labels = c("Credit-to-GDP 5Y Change"))
 ```
 
 ### Model estimation
@@ -226,7 +248,13 @@ logit_money = glm(crisisJST ~
 stargazer(logit_money,
           type = "text",
           align = TRUE,
-          omit = c("country"))
+          omit = c("country"),
+        dep.var.labels = c("Crisis (JST)"),
+        covariate.labels = c("Log-change Money - T-1",
+                             "Log-change Money - T-2",
+                             "Log-change Money - T-3",
+                             "Log-change Money - T-4",
+                             "Log-change Money - T-5"))
 ```
 
 #### Public debt as predictor
@@ -247,7 +275,13 @@ logit_gdp = glm(crisisJST ~
 stargazer(logit_gdp,
           type = "text",
           align = TRUE,
-          omit = c("country"))
+          omit = c("country"),
+        dep.var.labels = c("Crisis (JST)"),
+        covariate.labels = c("Debt-to-GDP - T-1",
+                             "Debt-to-GDP - T-2",
+                             "Debt-to-GDP - T-3",
+                             "Debt-to-GDP - T-4",
+                             "Debt-to-GDP - T-5"))
 ```
 
 ### ROC test
@@ -335,7 +369,7 @@ cat("In-Sample AUC: ", auc(roc_in_sample), "\n")
 cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 ```
 
-## Part B
+## Part B - Linear projections
 
 ```{r}
 jst = merge(jst, rec, by = c("year", "iso"))
