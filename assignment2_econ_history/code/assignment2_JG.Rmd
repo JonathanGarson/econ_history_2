@@ -2,8 +2,10 @@
 title: "Econ History Assignment 2"
 author: "Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI"
 date: "Nov 29, 2024"
-output: pdf_document
-keep_tex: yes
+output:
+  html_document:
+    df_print: paged
+keep_tex: true
 ---
 
 # Econ History Assignment 2
@@ -72,6 +74,8 @@ stargazer(logit_credit,
                              "Log-change Real Credit - T-4",
                              "Log-change Real Credit - T-5"))
 ```
+
+The findings indicate that the log-change in real credit at T-2 is the only statistically significant predictor of a crisis in this model. Its effect is positive: an increase in credit in period t increases the likelihood of witnessing a crisis in t+2.  In contrast, the other lagged variables do not show significant contributions to explaining the likelihood of a crisis.
 
 We now test for the joint significance of the lag variables. A first attempt to challenge the joint significance could be a Wald test. The null hypothesis is that the five lags of credit growth are not jointly significant:
 
@@ -145,6 +149,8 @@ stargazer(logit_bvx,
                              "Log-change Real Credit - T-4",
                              "Log-change Real Credit - T-5"))
 ```
+
+Similar to what was found with JST crisis, the outputs of the regression indicate that the log-change in real credit at T-2 is a statistically significant predictor of a crisis. Once again, its effect is positive: an increase in credit in period t increases the likelihood of witnessing a crisis in t+2. However, using BVX crisis we find that log change in real credit at T-5 is also a statistically significant predictor of a crisis. It’s effect is however weaker as the coefficient is lower.
 
 ```{r}
 wald.test(
@@ -260,6 +266,8 @@ stargazer(logit_money,
                              "Log-change Money - T-5"))
 ```
 
+In this model with money, the output of the regression indicates that, among all lagged independent variables, only the change in money at period t-2 increases the likelihood of witnessing a crisis in t significantly.
+
 #### Public debt as predictor
 
 ```{r, warning=FALSE}
@@ -286,6 +294,8 @@ stargazer(logit_gdp,
                              "Debt-to-GDP - T-4",
                              "Debt-to-GDP - T-5"))
 ```
+
+In this model using lagged debt to gdp as a predictor of a crisis we unexpectedly find a significant negative coefficient for the log-change in real credit at T-4, indicating that an increase in debt to gdp in t-4 decrease the likelihood of witnessing a crisis in period t. 
 
 ### ROC tests - Models using Money and Debt-to-GDP ratio
 
