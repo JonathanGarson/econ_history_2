@@ -3,8 +3,7 @@ title: "Econ History Assignment 2"
 author: "Ali BENRAMDANE, Mathilde BLANCHON, Jonathan GARSON, Andrea MAESTRI"
 date: "Nov 29, 2024"
 output:
-  html_document:
-    df_print: paged
+  pdf_document: default
 keep_tex: true
 ---
 
@@ -21,6 +20,8 @@ library(readxl)
 library(countrycode)
 library(pROC)
 library(lpirfs)
+library(tidyverse)
+library(ggplot2)
 ```
 
 ## Importing data
@@ -33,26 +34,25 @@ bvx = fread("../data/bvx_crises_list.csv")
 
 ## Part A - Logit
 
-Estimate a logit model with country fixed effects and with five lags of log changes in Money as a predictor for JST crises and document the results in table.
+Estimate a logit model with country fixed effects and with five lags of log changes in Real Credit as a predictor for JST crises and document the results in table.
 
 -   Test for joint significance of five lags credit growth.
 -   Repeat with BVX crisis date
 -   Use 5-year change in the ratio of credit over GDP predictor
 
-.
+\clearpage
 
 #### JST Crises
 
 \noindent
 
 ```{r, warning=FALSE, message=FALSE}
-
-# Create dependent variable and estimate model
-
+# Create dependent variable (real credit log-change)
 jst[, tloans_real := tloans/cpi]
 jst[, ln_tloans_real := log(tloans_real),]
 jst[, ln_diff_tloans := ln_tloans_real - shift(ln_tloans_real, 1, type = "lag"), by = country]
 
+#Estimate logit model
 logit_credit = glm(crisisJST ~ 
     shift(ln_diff_tloans, 1, type = "lag") 
     + shift(ln_diff_tloans, 2, type = "lag") 
@@ -63,6 +63,7 @@ logit_credit = glm(crisisJST ~
   ,family = binomial(link = "logit"), 
   data = jst)
 
+#Print results
 stargazer(logit_credit,
         type = "text",
         align = TRUE,
@@ -86,6 +87,7 @@ H_0: \beta_1 = \beta_2 = \beta_3 = \beta_4 = \beta_5 = 0\\
 $$
 
 ```{r}
+#Perform Wald test
 wald.test(
 b = coef(logit_credit),  # Coefficients from the full model
 Sigma = vcov(logit_credit),  # Variance-covariance matrix of coefficients
@@ -96,8 +98,8 @@ Terms = 2:6 # Indices of lagged predictors in the model
 Complementary, we can test joint significance with the likelihood ratio chi-square test. This tests consists of comparing the full model with a restricted model without the variables we want to test for. Let's first estimate the restricted model.
 
 ```{r}
-  # Test for joint significance of five lags credit growth. 
-  # We run a restricted model which excludes the five lags of credit growth 
+# Test for joint significance of five lags credit growth. 
+# We run a restricted model which excludes the five lags of credit growth 
 restricted_model <- glm(
   formula = crisisJST ~ factor(country),
   data = jst,
@@ -118,16 +120,19 @@ cat("P-value:", p_value, "\n")
 
 In both cases the p-value is close to 0, which means that we can reject the null hypothesis. Therefore, the five lags jointly contribute significantly to predicting the crisis variable.
 
+\clearpage
+
 #### BVX Crises
 
+\noindent
+
 ```{r, warning=FALSE}
-# We merge 
+# Merge JST and BVX datasets
 setnames(bvx, "countrycode", "iso")
 bvx = bvx[, country := NULL]
 jst = merge(jst, bvx, all.x = TRUE, by = c("iso", "year")) 
 
-# We regress
-
+# Estimate logit model for BVX crisis indicator
 logit_bvx = glm(bvx_crisis ~ 
       shift(ln_diff_tloans, 1, type = "lag") 
       + shift(ln_diff_tloans, 2, type = "lag") 
@@ -138,6 +143,7 @@ logit_bvx = glm(bvx_crisis ~
     ,family = binomial(link = "logit"), 
     data = jst)
 
+#Print the results
 stargazer(logit_bvx,
           type = "text",
           align = TRUE,
@@ -152,7 +158,10 @@ stargazer(logit_bvx,
 
 Similar to what was found with JST crisis, the outputs of the regression indicate that the log-change in real credit at T-2 is a statistically significant predictor of a crisis. Once again, its effect is positive: an increase in credit in period t increases the likelihood of witnessing a crisis in t+2. However, using BVX crisis we find that log change in real credit at T-5 is also a statistically significant predictor of a crisis. It’s effect is however weaker as the coefficient is lower.
 
+Overall, the result serves well as a robustness check for the relationship previously uncovered between credit growth and financial crisis likelihood, as the result holds also using a different indicator for financial crises.
+
 ```{r}
+# Perform Wald test
 wald.test(
   b = coef(logit_bvx),  # Coefficients from the full model
   Sigma = vcov(logit_bvx),  # Variance-covariance matrix of coefficients
@@ -160,23 +169,28 @@ wald.test(
 )
 ```
 
-Conclusion: We reject the null hypothesis, variables are jointly significant and able to predict the output variable. Hence, we get approximately the same result between BVX and JST crises classifications.
+Using the Wald test, we are able to reject the null hypothesis of independence, implying joint significance of the predictors. Hence, we get approximately the same result between BVX and JST crises classifications.
 
-#### GDP Ratio
+#### Credit-to-GDP Ratio
+
+\\
 
 Used 5-year change in the ratio of credit over GDP as a predictor
 
 ```{r, warning = FALSE}
+# Create dependent variable
 jst[, `:=` (gdp_real = gdp/cpi), by = c("country")]
 jst[, creditgdp := tloans_real/gdp_real, by = c("country")]
 jst[, creditgdpchange := creditgdp - shift(creditgdp, 5, type = "lag")]
 
+# Estimate model
 logit_gdp = glm(crisisJST ~ 
                 creditgdpchange 
                 + factor(country)
                 ,family = binomial(link = "logit"), 
                 data = jst)
 
+# Print results
 stargazer(logit_gdp,
           type = "text",
           align = TRUE,
@@ -184,6 +198,10 @@ stargazer(logit_gdp,
         dep.var.labels = c("Crisis (JST)"),
         covariate.labels = c("Credit-to-GDP 5Y Change"))
 ```
+
+Modeling the likelihood of a financial crisis through the 5-year change in the credit-to-GDP ratio, we yield a positive and significant coefficient. This is not surprising, as we had already rejected the hypothesis of independence between likelihood of a financial crisis and credit growth lags, and the coefficient might be absorbing the effect of the change in credit growth observed two years before the crisis.
+
+\clearpage
 
 ### Model estimation
 
@@ -220,7 +238,7 @@ roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
 roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
 
 # Plot ROC curves
-plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
+plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC - Real Credit Growth Model", legacy.axes = TRUE)
 plot(roc_out_sample, col = "red", add = TRUE)
 
 # Add legend
@@ -235,15 +253,21 @@ cat("Out-of-Sample AUC: ", auc(roc_out_sample), "\n")
 
 As we can judge from the Area Under the ROC (AUROC/AUC), the logit model using real credit as a predictor for financial crises has satisfactory in-sample performances (In-Sample AUC: 0.7161041), which drop slightly below the usual satisfactory threshold of 0.7 when predicting out of sample (Out-of-Sample AUC: 0.6581494). Further adjustments and variables might be needed to have a model with better predictive power.
 
+\clearpage
+
 #### Money as predictor
+
+\noindent
 
 Compare the baseline model to a logit model with money as a predictor.
 
 ```{r, warning=FALSE}
+# Create dependent variable
 jst[, money_real := money/cpi]
 jst[, ln_money_real := log(money_real),]
 jst[, ln_diff_money_real := ln_money_real - shift(ln_money_real, 1, type = "lag"), by = country]
 
+# Estimate model
 logit_money = glm(crisisJST ~ 
       shift(ln_diff_money_real, 1, type = "lag") 
       + shift(ln_diff_money_real, 2, type = "lag") 
@@ -254,6 +278,7 @@ logit_money = glm(crisisJST ~
     ,family = binomial(link = "logit"), 
     data = jst)
 
+#Print the results 
 stargazer(logit_money,
           type = "text",
           align = TRUE,
@@ -266,13 +291,39 @@ stargazer(logit_money,
                              "Log-change Money - T-5"))
 ```
 
-In this model with money, the output of the regression indicates that, among all lagged independent variables, only the change in money at period t-2 increases the likelihood of witnessing a crisis in t significantly.
+The logit model with "broad" money (M2/M3) log-changes as predictors yields very similar results to the previous model exploiting log-changes in real credit, as the output of the regression indicates that a positive change in the broad monetary aggregates significantly increases the likelihood of witnessing a crisis two years later. This is not surprising, as the broad money aggregates (M2/M3), which capture also the change in the banking multipliers and therefore explains at least part of the change in real credit, are strongly correlated with the real loan change indicator, as showed below.
+
+```{r, warning=FALSE, message=FALSE}
+# Compute the correlation coefficient
+correlation_coefficient <- cor(jst$ln_diff_money_real, jst$ln_diff_tloans, use = "pairwise.complete.obs")
+
+# Plot visually
+jst %>%
+  ggplot(aes(x = ln_diff_money_real,
+             y = ln_diff_tloans)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  
+  labs(title = paste0("Correlation between Real Credit Growth \n and Monetary Aggregate Growth (",
+                      "Pearson = ",
+                      round(correlation_coefficient, 2), ")"),  
+       x = "Log Difference in Broad Monetary Aggregates (M2/M3)",  
+       y = "Log Difference in Real Credit") +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.4))
+  
+```
+
+\clearpage
 
 #### Public debt as predictor
 
+\noindent
+
 ```{r, warning=FALSE}
+# Create dependent variable
 jst[, diff_debtgdp := debtgdp - shift(debtgdp, 1, type = "lag"), by = c("country")]
 
+# Estimate model
 logit_gdp = glm(crisisJST ~ 
       shift(diff_debtgdp, 1, type = "lag") 
       + shift(diff_debtgdp, 2, type = "lag") 
@@ -283,19 +334,22 @@ logit_gdp = glm(crisisJST ~
     ,family = binomial(link = "logit"), 
     data = jst)
 
+#Print the results
 stargazer(logit_gdp,
           type = "text",
           align = TRUE,
           omit = c("country"),
         dep.var.labels = c("Crisis (JST)"),
-        covariate.labels = c("Debt-to-GDP - T-1",
-                             "Debt-to-GDP - T-2",
-                             "Debt-to-GDP - T-3",
-                             "Debt-to-GDP - T-4",
-                             "Debt-to-GDP - T-5"))
+        covariate.labels = c("1Y Debt-to-GDP growth - T-1",
+                             "1Y Debt-to-GDP growth - T-2",
+                             "1Y Debt-to-GDP growth - T-3",
+                             "1Y Debt-to-GDP growth - T-4",
+                             "1Y Debt-to-GDP growth - T-5"))
 ```
 
-In this model using lagged debt to gdp as a predictor of a crisis we unexpectedly find a significant negative coefficient for the log-change in real credit at T-4, indicating that an increase in debt to gdp in t-4 decrease the likelihood of witnessing a crisis in period t. 
+In this model using lags of Debt-to-GDP ratio as predictors of a financial crisis we find evidence of significant negative correlation between the log-change in the debt-to-GDP ratio in time t and the likelihood of a crisis five years later. As this variable is not correlated with real credit growth in our sample (Pearson = -0.03), we can assume that different channels play a role here. For instance, governments might be more likely to increase public expenditure in periods of economic downturn, which are less likely to be associated with financial crisis happening very few years later.
+
+\clearpage
 
 ### ROC tests - Models using Money and Debt-to-GDP ratio
 
@@ -309,6 +363,7 @@ post1984 = jst[year >= 1984,]
 #### Money
 
 ```{r}
+# Estimate model
 logit_1984 = glm(crisisJST ~ 
       shift(ln_diff_money_real, 1, type = "lag") 
       + shift(ln_diff_money_real, 2, type = "lag") 
@@ -332,7 +387,7 @@ roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
 roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
 
 # Plot ROC curves
-plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
+plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC - Monetary aggregates (M2/M3) Change", legacy.axes = TRUE)
 plot(roc_out_sample, col = "red", add = TRUE)
 
 # Add legend
@@ -349,6 +404,7 @@ Similarly to the first model, the logit model using log-change in money as a pre
 #### Debt-to-GDP
 
 ```{r}
+# Estimate model
 logit_1984 = glm(crisisJST ~ 
       shift(diff_debtgdp, 1, type = "lag") 
       + shift(diff_debtgdp, 2, type = "lag") 
@@ -372,7 +428,7 @@ roc_in_sample <- roc(pre1984$crisisJST, pre1984$predicted_prob)
 roc_out_sample <- roc(post1984$crisisJST, post1984$predicted_prob)
 
 # Plot ROC curves
-plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC", legacy.axes = TRUE)
+plot(roc_in_sample, col = "blue", main = "In-Sample vs. Out-of-Sample ROC - Debt-to-GDP Growth", legacy.axes = TRUE)
 plot(roc_out_sample, col = "red", add = TRUE)
 
 # Add legend
@@ -391,6 +447,7 @@ Analogous considerations apply to the model exploiting the Debt-to-GDP ratio, as
 ## Part B - Linear projections
 
 ```{r}
+#Merge datasets and adjust shock variables
 jst = merge(jst, rec, by = c("year", "iso"))
 jst[, log_y := log(rgdpbarro)]
 
@@ -401,7 +458,8 @@ lp_reg[, `F` := ifelse(is.na(`F`), 0, `F`)]
 
 ### Normal Recessions
 
-```{r}
+```{r, fig.keep = "last"}
+# Estimate model
 lp_normal <- lp_lin_panel(
   data_set = lp_reg,
   endog_data = "log_y",      # Dependent variable
@@ -415,12 +473,18 @@ lp_normal <- lp_lin_panel(
 )
 
 # Plot impulse response functions (IRFs)
-plot(lp_normal)
+# p <- plot(lp_normal)
+
+# Customize the plot
+plot(lp_normal) + ggtitle("Cumulative Impact of Normal Recessions on Log-GDP (IRF)") +
+  theme_minimal() +  # Use a minimal theme
+  theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
 ### Financial Recessions
 
-```{r}
+```{r, results='hide', fig.keep='last'}
+# Estimate model
 lp_normal <- lp_lin_panel(
   data_set = lp_reg,
   endog_data = "log_y",      # Dependent variable
@@ -434,7 +498,12 @@ lp_normal <- lp_lin_panel(
 )
 
 # Plot impulse response functions (IRFs)
-plot(lp_normal)
+p <- plot(lp_normal)
+
+# Customize the plot
+p + ggtitle("Cumulative Impact of Financial Recessions on Log-GDP (IRF)") +
+  theme_minimal() +  # Use a minimal theme
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
-The graphs reveal key differences in the economic costs of normal and financial recessions over a five-year horizon, with no evidence of recovery in either case. Both types of recessions exhibit a similar initial impact, with GDP per capita dropping sharply at year 1. However, their paths diverge slightly in the following years. In normal recessions, the GDP losses after year 1 remain consistently around -5% to -6% throughout the horizon. In financial recessions, the losses deepen gradually, reaching approximately -7% by year 5. The absence of recovery in both graphs highlights the persistent nature of the economic damage caused by recessions, with financial recessions appearing more costly due to their steadily worsening impact. Overall, the results indicate that neither type of recession allows for meaningful recovery within five years, with financial recessions causing slightly greater and more prolonged economic damage.
+The imputed Impulse Response Functions reveal severe economic costs of both normal and financial recessions over a five-year horizon, with no evidence of recovery in either case. Both types of recessions exhibit a similar initial impact, with GDP per capita dropping sharply at year 1 and keeping falling importantly for the following two years, with signs of stabilization starting from four years after the beginning of the crisis. However, their paths diverge slightly in the following years. In normal recessions, the cumulative GDP losses after year 1 remain consistently around -5% to -6% throughout the horizon. In financial recessions, the cumulative losses deepen gradually, reaching approximately -7% by year 5. The absence of recovery in both graphs highlights the persistent nature of the economic damage caused by recessions, with financial recessions appearing more costly (even though the confidence bands associated to these estimates are larger than with normal recessions). Overall, the results indicate that neither type of recession allows for meaningful recovery within five years, with financial recessions causing slightly greater and more prolonged economic damage.
